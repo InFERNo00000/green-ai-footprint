@@ -23,6 +23,12 @@ if not DATABASE_URL:
     # Safe local default only (keeps dev experience, but prevents accidental prod fallbacks)
     DATABASE_URL = "mysql+mysqlconnector://root:password@localhost:3306/green_ai_footprint"
 
+if DATABASE_URL.startswith("internal-postgresql://"):
+    DATABASE_URL = "postgresql+psycopg2://" + DATABASE_URL[len("internal-postgresql://"):]
+
+if DATABASE_URL.startswith("internal-postgres://"):
+    DATABASE_URL = "postgresql+psycopg2://" + DATABASE_URL[len("internal-postgres://"):]
+
 if DATABASE_URL.startswith("postgresql://"):
     # SQLAlchemy accepts postgresql://, but Render often provides postgres://
     # Keep explicit scheme normalization in one place.
