@@ -34,6 +34,7 @@ from sqlalchemy import text
 # Database imports
 from sqlalchemy.orm import Session
 from .database import get_db, test_connection
+from .database import get_sanitized_database_url
 from .models import AIModel, CalculationLog, Organization, User, GridCarbonIntensity, GPUProfile, ESGReport
 from .seed import create_tables, seed_database
 from .services.calculator import (
@@ -57,6 +58,12 @@ app = FastAPI(
 
 @app.on_event("startup")
 def _startup_autoseed() -> None:
+    # Always print the effective DB target (password masked) to break env-var/debug loops.
+    try:
+        print(f"[DB_URL] {json.dumps(get_sanitized_database_url(), default=str)}")
+    except Exception as e:
+        print(f"[DB_URL] failed to serialize: {e}")
+
     if os.getenv("AUTO_SEED", "").lower() not in {"1", "true", "yes"}:
         print("[AUTO_SEED] disabled")
         return
@@ -95,6 +102,13 @@ def _startup_autoseed() -> None:
             db2.close()
     except Exception as e:
         print(f"[AUTO_SEED] seed failed: {e}")
+
+
+@app.get("/api/v1/_debug/db", tags=["debug"])
+async def debug_db_url():
+    if os.getenv("DEBUG_DB_URL", "").lower() not in {"1", "true", "yes"}:
+        raise HTTPException(status_code=404, detail="Not found")
+    return get_sanitized_database_url()
 
 
 def _get_cors_origins() -> List[str]:

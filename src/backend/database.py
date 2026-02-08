@@ -146,3 +146,29 @@ def test_connection():
     except Exception as e:
         print(f"Database connection failed: {e}")
         return False
+
+
+def get_sanitized_database_url() -> dict:
+    """Return a sanitized view of the effective DATABASE_URL (no password)."""
+    try:
+        url = make_url(DATABASE_URL)
+        return {
+            "backend": url.get_backend_name(),
+            "driver": url.drivername,
+            "username": url.username,
+            "host": url.host,
+            "port": url.port,
+            "database": url.database,
+            "query": dict(url.query),
+        }
+    except Exception:
+        # Fall back to best-effort masking if parsing fails
+        raw = DATABASE_URL
+        if "://" in raw and "@" in raw:
+            prefix, rest = raw.split("://", 1)
+            creds, after = rest.split("@", 1)
+            if ":" in creds:
+                user, _pw = creds.split(":", 1)
+                creds = f"{user}:***"
+            raw = f"{prefix}://{creds}@{after}"
+        return {"raw": raw}
