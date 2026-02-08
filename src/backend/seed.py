@@ -11,13 +11,9 @@ Populates the MySQL database with:
 Run this script after database migration to seed initial data.
 """
 
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
 from sqlalchemy.orm import Session
-from database import engine, SessionLocal, Base, test_connection
-from models import (
+from .database import engine, SessionLocal, Base, test_connection
+from .models import (
     Organization, User, AIModel, GridCarbonIntensity, GPUProfile,
     ModelCategoryEnum, GpuTypeEnum
 )

@@ -18,7 +18,7 @@ from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
 from decimal import Decimal
 from sqlalchemy.orm import Session
-from models import AIModel, GPUProfile, GridCarbonIntensity
+from ..models import AIModel, GPUProfile, GridCarbonIntensity
 
 # Constants from TypeScript constants.ts
 DEFAULT_PUE = 1.2
