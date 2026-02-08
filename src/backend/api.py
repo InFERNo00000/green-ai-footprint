@@ -29,11 +29,13 @@ import io
 from pathlib import Path
 
 from sqlalchemy import func
+from sqlalchemy import text
 
 # Database imports
 from sqlalchemy.orm import Session
 from .database import get_db, test_connection
 from .models import AIModel, CalculationLog, Organization, User, GridCarbonIntensity, GPUProfile, ESGReport
+from .seed import create_tables, seed_database
 from .services.calculator import (
     CalculatorService,
     FootprintInput,
@@ -51,6 +53,40 @@ app = FastAPI(
     version="1.0.0",
     description="Enterprise API for GenAI environmental impact management",
 )
+
+
+@app.on_event("startup")
+def _startup_autoseed() -> None:
+    if os.getenv("AUTO_SEED", "").lower() not in {"1", "true", "yes"}:
+        return
+
+    import logging
+    from .database import SessionLocal
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        create_tables()
+
+        db = SessionLocal()
+        try:
+            has_any = (
+                (db.query(AIModel).count() > 0)
+                or (db.query(GridCarbonIntensity).count() > 0)
+                or (db.query(GPUProfile).count() > 0)
+            )
+        finally:
+            db.close()
+
+        if has_any:
+            logger.info("[AUTO_SEED] Skipping seed; data already present")
+            return
+
+        logger.info("[AUTO_SEED] Seeding database...")
+        seed_database()
+        logger.info("[AUTO_SEED] Seed complete")
+    except Exception as e:
+        logger.exception("[AUTO_SEED] Seed failed: %s", e)
 
 
 def _get_cors_origins() -> List[str]:
