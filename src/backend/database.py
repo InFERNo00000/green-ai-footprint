@@ -59,9 +59,13 @@ def _build_connect_args() -> dict:
 
     if is_postgres:
         # psycopg2 SSL options
-        connect_args["sslmode"] = "verify-full" if verify_cert else "require"
-        if ca_path:
+        if verify_cert and ca_path:
+            connect_args["sslmode"] = "verify-full"
             connect_args["sslrootcert"] = ca_path
+        else:
+            # Render external Postgres commonly works with sslmode=require and system CAs.
+            # verify-full requires a root cert file path which isn't always available.
+            connect_args["sslmode"] = "require"
         return connect_args
 
     # mysql-connector-python SSL options
