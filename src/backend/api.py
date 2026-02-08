@@ -1241,7 +1241,12 @@ async def get_dashboard_metrics():
         # CRITICAL: Commit any pending transaction, set isolation to READ COMMITTED, 
         # and start a fresh transaction to see latest committed data
         db.commit()  # Commit any pending changes
-        db.execute(text("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED"))
+        dialect = getattr(getattr(db, "bind", None), "dialect", None)
+        dialect_name = getattr(dialect, "name", "")
+        if dialect_name == "postgresql":
+            db.execute(text("SET TRANSACTION ISOLATION LEVEL READ COMMITTED"))
+        else:
+            db.execute(text("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED"))
         db.rollback()  # Start fresh transaction with new isolation level
         db.expire_all()
         
@@ -1400,9 +1405,13 @@ async def get_dashboard_metrics():
         start_today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         end_today = start_today + timedelta(days=1)
 
+        hour_expr = func.to_char(CalculationLog.calculated_at, "HH24")
+        if dialect_name not in {"postgresql"}:
+            hour_expr = func.date_format(CalculationLog.calculated_at, "%H")
+
         hour_rows = (
             db.query(
-                func.date_format(CalculationLog.calculated_at, "%H").label("hour"),
+                hour_expr.label("hour"),
                 func.sum(CalculationLog.energy_kwh).label("energy_kwh"),
                 func.sum(CalculationLog.co2e_grams).label("co2e_grams"),
             )
@@ -1411,7 +1420,7 @@ async def get_dashboard_metrics():
                 CalculationLog.calculated_at >= start_today,
                 CalculationLog.calculated_at < end_today,
             )
-            .group_by(func.date_format(CalculationLog.calculated_at, "%H"))
+            .group_by(hour_expr)
             .execution_options(compiled_cache=None)
             .all()
         )

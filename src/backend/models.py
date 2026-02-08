@@ -8,19 +8,18 @@ Adapted from PostgreSQL schema to use MySQL-compatible data types.
 
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, Boolean, DateTime, Text, ForeignKey, DECIMAL
-from sqlalchemy.dialects.mysql import ENUM
+from sqlalchemy import Column, String, Integer, Boolean, DateTime, Text, ForeignKey, DECIMAL, Enum
 from sqlalchemy.orm import relationship
-from database import Base
+from .database import Base
 
 # Enum definitions for MySQL
-ModelCategoryEnum = ENUM(
+ModelCategoryEnum = Enum(
     'frontier-llm', 'mid-size-llm', 'small-edge', 'code-model',
     'image-gen', 'embedding', 'multimodal', 'custom',
     name='model_category'
 )
 
-GpuTypeEnum = ENUM(
+GpuTypeEnum = Enum(
     'nvidia-h100', 'nvidia-a100-80gb', 'nvidia-a100-40gb',
     'nvidia-v100', 'nvidia-t4', 'nvidia-a10g', 'cpu-only',
     name='gpu_type'

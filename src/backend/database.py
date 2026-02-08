@@ -23,6 +23,14 @@ if not DATABASE_URL:
     # Safe local default only (keeps dev experience, but prevents accidental prod fallbacks)
     DATABASE_URL = "mysql+mysqlconnector://root:password@localhost:3306/green_ai_footprint"
 
+if DATABASE_URL.startswith("postgresql://"):
+    # SQLAlchemy accepts postgresql://, but Render often provides postgres://
+    # Keep explicit scheme normalization in one place.
+    DATABASE_URL = "postgresql+psycopg2://" + DATABASE_URL[len("postgresql://"):]
+
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = "postgresql+psycopg2://" + DATABASE_URL[len("postgres://"):]
+
 
 def _build_connect_args() -> dict:
     """Build DB driver connect_args with optional SSL settings.
@@ -40,6 +48,15 @@ def _build_connect_args() -> dict:
 
     ca_path = os.getenv("DB_SSL_CA")
     verify_cert = os.getenv("DB_SSL_VERIFY_CERT", "true").lower() in {"1", "true", "yes"}
+
+    is_postgres = DATABASE_URL.startswith("postgresql+") or DATABASE_URL.startswith("postgresql://") or DATABASE_URL.startswith("postgres://")
+
+    if is_postgres:
+        # psycopg2 SSL options
+        connect_args["sslmode"] = "verify-full" if verify_cert else "require"
+        if ca_path:
+            connect_args["sslrootcert"] = ca_path
+        return connect_args
 
     # mysql-connector-python SSL options
     if ca_path:
