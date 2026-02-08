@@ -58,35 +58,43 @@ app = FastAPI(
 @app.on_event("startup")
 def _startup_autoseed() -> None:
     if os.getenv("AUTO_SEED", "").lower() not in {"1", "true", "yes"}:
+        print("[AUTO_SEED] disabled")
         return
 
-    import logging
     from .database import SessionLocal
 
-    logger = logging.getLogger(__name__)
-
     try:
+        print("[AUTO_SEED] enabled: creating tables...")
         create_tables()
 
         db = SessionLocal()
         try:
-            has_any = (
-                (db.query(AIModel).count() > 0)
-                or (db.query(GridCarbonIntensity).count() > 0)
-                or (db.query(GPUProfile).count() > 0)
-            )
+            models_count = db.query(AIModel).count()
+            grids_count = db.query(GridCarbonIntensity).count()
+            gpus_count = db.query(GPUProfile).count()
+            has_any = (models_count > 0) or (grids_count > 0) or (gpus_count > 0)
         finally:
             db.close()
 
         if has_any:
-            logger.info("[AUTO_SEED] Skipping seed; data already present")
+            print(
+                f"[AUTO_SEED] skipping; data already present (models={models_count}, grids={grids_count}, gpus={gpus_count})"
+            )
             return
 
-        logger.info("[AUTO_SEED] Seeding database...")
+        print("[AUTO_SEED] seeding database...")
         seed_database()
-        logger.info("[AUTO_SEED] Seed complete")
+
+        db2 = SessionLocal()
+        try:
+            print(
+                "[AUTO_SEED] seed complete "
+                f"(models={db2.query(AIModel).count()}, grids={db2.query(GridCarbonIntensity).count()}, gpus={db2.query(GPUProfile).count()})"
+            )
+        finally:
+            db2.close()
     except Exception as e:
-        logger.exception("[AUTO_SEED] Seed failed: %s", e)
+        print(f"[AUTO_SEED] seed failed: {e}")
 
 
 def _get_cors_origins() -> List[str]:
