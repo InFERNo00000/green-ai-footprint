@@ -95,6 +95,18 @@ def _build_connect_args() -> dict:
 
     if is_postgres:
         # Postgres SSL is enforced via DATABASE_URL normalization above.
+        connect_args.update(
+            {
+                # Prevent long hangs during cold starts / transient DB restarts
+                "connect_timeout": int(os.getenv("DB_CONNECT_TIMEOUT", "10")),
+                # Keep connections alive; Render/free tier can drop idle SSL sessions
+                "keepalives": 1,
+                "keepalives_idle": int(os.getenv("DB_KEEPALIVES_IDLE", "30")),
+                "keepalives_interval": int(os.getenv("DB_KEEPALIVES_INTERVAL", "10")),
+                "keepalives_count": int(os.getenv("DB_KEEPALIVES_COUNT", "5")),
+                "application_name": os.getenv("DB_APP_NAME", "green-ai-footprint"),
+            }
+        )
         return connect_args
 
     # mysql-connector-python SSL options
@@ -112,11 +124,21 @@ def _build_connect_args() -> dict:
     return connect_args
 
 # Create SQLAlchemy engine
+_is_postgres_engine = False
+try:
+    _is_postgres_engine = make_url(DATABASE_URL).get_backend_name() == "postgresql"
+except Exception:
+    _is_postgres_engine = DATABASE_URL.startswith("postgresql")
+
 engine = create_engine(
     DATABASE_URL,
     echo=os.getenv("ENVIRONMENT") == "development",  # Log SQL in development
     pool_pre_ping=True,  # Check connections before use
-    pool_recycle=3600,   # Recycle connections every hour
+    # Render/free-tier Postgres can drop idle SSL connections; recycle sooner
+    pool_recycle=300 if _is_postgres_engine else 3600,
+    pool_timeout=30,
+    pool_size=1 if _is_postgres_engine else 5,
+    max_overflow=0 if _is_postgres_engine else 10,
     connect_args=_build_connect_args(),
 )
 
