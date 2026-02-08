@@ -9,6 +9,7 @@ Handles connection pooling and session management.
 import os
 from pathlib import Path
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine.url import make_url
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
@@ -38,6 +39,41 @@ if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = "postgresql+psycopg2://" + DATABASE_URL[len("postgres://"):]
 
 
+def _normalize_postgres_ssl_url(database_url: str) -> str:
+    ssl_enabled = os.getenv("DB_SSL", "").lower() in {"1", "true", "yes"}
+    if not ssl_enabled:
+        return database_url
+
+    ca_path = os.getenv("DB_SSL_CA")
+    verify_cert = os.getenv("DB_SSL_VERIFY_CERT", "true").lower() in {"1", "true", "yes"}
+
+    try:
+        url = make_url(database_url)
+    except Exception:
+        return database_url
+
+    if url.get_backend_name() != "postgresql":
+        return database_url
+
+    q = dict(url.query)
+    # Remove any ssl params that could be inherited from provider defaults
+    q.pop("sslmode", None)
+    q.pop("sslrootcert", None)
+
+    if verify_cert and ca_path:
+        q["sslmode"] = "verify-full"
+        q["sslrootcert"] = ca_path
+    else:
+        # Render external Postgres commonly works with sslmode=require without a local root.crt.
+        q["sslmode"] = "require"
+
+    return str(url.set(query=q))
+
+
+if DATABASE_URL.startswith("postgresql+"):
+    DATABASE_URL = _normalize_postgres_ssl_url(DATABASE_URL)
+
+
 def _build_connect_args() -> dict:
     """Build DB driver connect_args with optional SSL settings.
 
@@ -58,14 +94,7 @@ def _build_connect_args() -> dict:
     is_postgres = DATABASE_URL.startswith("postgresql+") or DATABASE_URL.startswith("postgresql://") or DATABASE_URL.startswith("postgres://")
 
     if is_postgres:
-        # psycopg2 SSL options
-        if verify_cert and ca_path:
-            connect_args["sslmode"] = "verify-full"
-            connect_args["sslrootcert"] = ca_path
-        else:
-            # Render external Postgres commonly works with sslmode=require and system CAs.
-            # verify-full requires a root cert file path which isn't always available.
-            connect_args["sslmode"] = "require"
+        # Postgres SSL is enforced via DATABASE_URL normalization above.
         return connect_args
 
     # mysql-connector-python SSL options
